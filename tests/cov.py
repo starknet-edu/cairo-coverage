@@ -1,16 +1,64 @@
 from collections import defaultdict
+from dataclasses import dataclass
 from json import dump
-from sys import stdout
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
-
+from colorama import Fore, Style
+from columnar import columnar
 from starkware.cairo.lang.compiler.program import ProgramBase
-from starkware.cairo.lang.vm.relocatable import MaybeRelocatable
-from starkware.cairo.lang.vm.vm_core import RunContext
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner
-from starkware.cairo.lang.vm.vm_core import VirtualMachine
+from starkware.cairo.lang.vm.relocatable import MaybeRelocatable
+from starkware.cairo.lang.vm.vm_core import RunContext, VirtualMachine
 
-from coverage.results import Numbers
+
+@dataclass
+class CoverageFile:
+    name: str
+    covered: Set[int]
+    statements: Set[int]
+    precision: int = 1
+
+    def __post_init__(self):
+        self.nb_statements = len(self.statements)
+        self.missed = sorted(list(self.statements - self.covered))
+        self.pct_covered = round(100 * len(self.covered) / len(self.statements), self.precision)
+        self.pct_missed = round(100 * len(self.missed) / len(self.statements), self.precision)
+
+    def columnar_format(self):
+        missed = "" if not self.missed else self.missed
+        if self.pct_covered < 50.0:
+            color = Fore.RED
+        elif 50.0 <= self.pct_covered < 80.0:
+            color = Fore.YELLOW
+        else:
+            color = Fore.GREEN
+        return [
+            self.name,
+            self.nb_statements,
+            f"{color}{self.pct_covered}{Style.RESET_ALL}",
+            f"{color}{self.pct_missed}{Style.RESET_ALL}",
+            f"{color}{missed}{Style.RESET_ALL}",
+        ]
+
+
+def report_runs():
+    report_dict = OverrideVm.covered()
+    statements = OverrideVm.statements()
+    report_file = {}
+    print()
+    files = [
+        CoverageFile(statements=set(statements[file]), covered=set(coverage), name=file).columnar_format()
+        for file, coverage in report_dict.items()
+    ]
+    print(
+        columnar(
+            data=files,
+            headers=["  Name  ", "  Statements  ", "  Covered  ", "  Missed  ", "  Missing lines  "],
+        )
+    )
+
+    with open("report.json", "w") as f:
+        dump(report_file, f, sort_keys=True, indent=4)
 
 
 class OverrideVm(VirtualMachine):
@@ -40,10 +88,14 @@ class OverrideVm(VirtualMachine):
         self.old_end_run()
         if self.program.debug_info is not None:
             self.pcs = self.touched_pcs()
-            self.report()
+            self.cover_file()
 
     @staticmethod
     def covered(val: defaultdict(list) = defaultdict(list)):
+        return val
+
+    @staticmethod
+    def statements(val: defaultdict(list) = defaultdict(list)):
         return val
 
     def pc_to_line(
@@ -56,81 +108,29 @@ class OverrideVm(VirtualMachine):
         instruct = self.program.debug_info.instruction_locations[pc].inst
         file = instruct.input_file.filename
         while True:
-            lines = list(
-                range(
-                    instruct.start_line,
-                    instruct.end_line + 1,
+            if "autogen" not in file:
+                lines = list(
+                    range(
+                        instruct.start_line,
+                        instruct.end_line + 1,
+                    )
                 )
-            )
-            if should_update_report:
-                report_dict[file].extend(lines)
-            statements[file].extend(lines)
+                if should_update_report:
+                    report_dict[file].extend(lines)
+                statements[file].extend(lines)
             if instruct.parent_location is not None:
                 instruct = instruct.parent_location[0]
                 file = instruct.input_file.filename
             else:
                 return
 
-    def report(
+    def cover_file(
         self,
     ):
-        print()
         report_dict = self.__class__.covered()
-        statements = defaultdict(list)
+        statements = self.__class__.statements()
         for pc in set(self.program.debug_info.instruction_locations.keys()):
             self.pc_to_line(pc=pc, report_dict=report_dict, statements=statements)
-        report_file = {}
-        pr_dict = {}
-        for file, coverage in report_dict.items():
-            n_statements = len(set(statements[file]))
-            n_executed = len(set(coverage))
-            n_missing = n_statements - n_executed
-            num = Numbers(
-                precision=1,
-                n_files=len(report_dict.keys()),
-                n_statements=n_statements,
-                n_excluded=0,
-                n_missing=n_missing,
-                n_branches=0,
-                n_partial_branches=0,
-                n_missing_branches=0,
-            )
-            pr_dict[file] = num
-            report_file[file] = self.report_one_file(nums=num, executed=coverage)
-        self.print_sum(pr_dict)
-
-        with open("report.json", "w") as f:
-            dump(report_file, f, sort_keys=True, indent=4)
-
-    def print_sum(self, pr_dict):
-        max_name = max([len(filenames) for filenames in pr_dict] + [5])
-        fmt_name = "%%- %ds  " % max_name
-        fmt_skip_covered = "\n%s file%s skipped due to complete coverage."
-        fmt_skip_empty = "\n%s empty file%s skipped."
-
-        header = (fmt_name % "Name") + " Stmts   Miss"
-        fmt_coverage = fmt_name + "%6d %6d"
-        width100 = Numbers(precision=1).pc_str_width()
-        header += "%*s" % (width100 + 4, "Cover")
-        fmt_coverage += "%%%ds%%%%" % (width100 + 3,)
-
-        header += "   Missing"
-        fmt_coverage += "   %s"
-        rule = "-" * len(header)
-
-        column_order = dict(name=0, stmts=1, miss=2, cover=-1)
-        lines = []
-
-        self.writeout(header)
-        self.writeout(rule)
-        for file, nums in pr_dict.items():
-            args = (file, nums.n_statements, nums.n_missing, nums.pc_covered_str, 100 - float(nums.pc_covered_str))
-            text = fmt_coverage % args
-            # Add numeric percent coverage so that sorting makes sense.
-            args += (nums.pc_covered,)
-            lines.append((text, args))
-        for line in lines:
-            self.writeout(line[0])
 
     def report_one_file(self, nums, executed):
         """Extract the relevant report data for a single file."""
@@ -143,14 +143,9 @@ class OverrideVm(VirtualMachine):
             "excluded_lines": nums.n_excluded,
         }
         reported_file = {
-            "executed_lines": sorted(list(set(executed))),
+            "executed_lines": executed,
             "summary": summary,
             "missing_lines": [],
             "excluded_lines": [],
         }
         return reported_file
-
-    def writeout(self, line):
-        """Write a line to the output, adding a newline."""
-        stdout.write(line.rstrip())
-        stdout.write("\n")
