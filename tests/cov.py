@@ -9,6 +9,7 @@ from starkware.cairo.lang.compiler.program import ProgramBase
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable
 from starkware.cairo.lang.vm.vm_core import RunContext, VirtualMachine
+from starkware.cairo.lang.vm import cairo_runner
 
 
 @dataclass
@@ -20,9 +21,11 @@ class CoverageFile:
 
     def __post_init__(self):
         self.nb_statements = len(self.statements)
+        self.nb_covered = len(self.covered)
         self.missed = sorted(list(self.statements - self.covered))
-        self.pct_covered = round(100 * len(self.covered) / len(self.statements), self.precision)
-        self.pct_missed = round(100 * len(self.missed) / len(self.statements), self.precision)
+        self.nb_missed = len(self.missed)
+        self.pct_covered = 100 * self.nb_covered / self.nb_statements
+        self.pct_missed = 100 * self.nb_missed / self.nb_statements
 
     def columnar_format(self):
         missed = "" if not self.missed else self.missed
@@ -33,32 +36,62 @@ class CoverageFile:
         else:
             color = Fore.GREEN
         return [
-            self.name,
-            self.nb_statements,
-            f"{color}{self.pct_covered}{Style.RESET_ALL}",
-            f"{color}{self.pct_missed}{Style.RESET_ALL}",
+            f"{color}{self.name}  {Style.RESET_ALL}",
+            f"{color}{self.nb_statements}{Style.RESET_ALL}",
+            f"{color}{self.pct_covered:.{self.precision}f}{Style.RESET_ALL}",
+            f"{color}{self.pct_missed:.{self.precision}f}{Style.RESET_ALL}",
             f"{color}{missed}{Style.RESET_ALL}",
         ]
 
 
-def report_runs():
+def report_runs(
+    excluded_file: Optional[Set[str]] = None, precision=1, out_file: Optional[str] = None, print_summary: bool = True
+):
+    if excluded_file is None:
+        excluded_file = []
+    assert out_file.endswith(".json"), "Only json supported for now"
     report_dict = OverrideVm.covered()
     statements = OverrideVm.statements()
     report_file = {}
     print()
     files = [
-        CoverageFile(statements=set(statements[file]), covered=set(coverage), name=file).columnar_format()
+        CoverageFile(statements=set(statements[file]), covered=set(coverage), name=file, precision=precision)
         for file, coverage in report_dict.items()
+        if file not in excluded_file
     ]
-    print(
-        columnar(
-            data=files,
-            headers=["  Name  ", "  Statements  ", "  Covered  ", "  Missed  ", "  Missing lines  "],
-        )
-    )
 
-    with open("report.json", "w") as f:
+    if out_file is not None:
+        for file in files:
+            report_one_file(covered_file=file)
+    if print_summary:
+        print(
+            columnar(
+                data=[x.columnar_format() for x in files],
+                headers=["  Name  ", "  Statements  ", "  Covered  ", "  Missed  ", "  Missing lines  "],
+                justify=["l", "c", "c", "c", "l"],
+            )
+        )
+
+    with open(out_file, "w") as f:
         dump(report_file, f, sort_keys=True, indent=4)
+
+
+def report_one_file(covered_file: CoverageFile):
+    """Extract the relevant report data for a single file."""
+    summary = {
+        "covered_lines": covered_file.nb_covered,
+        "num_statements": covered_file.nb_statements,
+        "percent_covered": covered_file.pct_covered,
+        "missing_lines": covered_file.nb_missed,
+        "excluded_lines": 0,
+    }
+    reported_file = {
+        "executed_lines": covered_file.covered,
+        "summary": summary,
+        "missing_lines": [],
+        "excluded_lines": [],
+    }
+    return reported_file
 
 
 class OverrideVm(VirtualMachine):
@@ -132,20 +165,5 @@ class OverrideVm(VirtualMachine):
         for pc in set(self.program.debug_info.instruction_locations.keys()):
             self.pc_to_line(pc=pc, report_dict=report_dict, statements=statements)
 
-    def report_one_file(self, nums, executed):
-        """Extract the relevant report data for a single file."""
-        summary = {
-            "covered_lines": nums.n_executed,
-            "num_statements": nums.n_statements,
-            "percent_covered": nums.pc_covered,
-            "percent_covered_display": nums.pc_covered_str,
-            "missing_lines": nums.n_missing,
-            "excluded_lines": nums.n_excluded,
-        }
-        reported_file = {
-            "executed_lines": executed,
-            "summary": summary,
-            "missing_lines": [],
-            "excluded_lines": [],
-        }
-        return reported_file
+
+cairo_runner.VirtualMachine = OverrideVm

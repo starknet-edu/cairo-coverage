@@ -1,13 +1,14 @@
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass
-import os
+
 import pytest
-from starkware.starknet.testing.starknet import Starknet
-from starkware.crypto.signature.signature import private_to_stark_key
-from starkware.starkware_utils.error_handling import StarkException
 from asynctest import TestCase
+from starkware.crypto.signature.signature import private_to_stark_key
+from starkware.starknet.testing.starknet import Starknet
+from starkware.starkware_utils.error_handling import StarkException
+
 from tests import cov
-from starkware.starknet.testing.contract_utils import get_contract_class
 
 
 @dataclass
@@ -119,8 +120,7 @@ class CairoContractTest(TestCase):
             constructor_calldata=mockERC20_calldata,
         )
         cls.maxDiff = None  # we want strict equality between felts so no max diff
-        cls.coverage = cov.Cov(get_contract_class(source=CONTRACT_FILE, disable_hint_validation=True))
-        cls.coverage.start()
+
         await cls.multisig.create_proposal(  # a signer creates a proposal
             amount=(1, 0), to_=signer1, targetERC20=cls.mockERC20.contract_address
         ).execute(
@@ -219,7 +219,7 @@ class CairoContractTest(TestCase):
         execution_info = await self.multisig.view_proposal(proposal_nb=(0, 0)).call()
         end_balance = await self.mockERC20.balanceOf(account=signer1).call()
         signer = await self.multisig.view_approved_signer(proposal_nb=(0, 0), signer_nb=(2, 0)).call()
-        self.coverage.report()
+        cov.report_runs(out_file="report.json")
 
         # check that the first event to be emitted is the execution event
         self.assertEqual(res.main_call_events[0], expected_execute_event)
