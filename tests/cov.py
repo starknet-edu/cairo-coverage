@@ -1,15 +1,35 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from json import dump
+from os import get_terminal_size
+from textwrap import wrap
 from typing import Any, Dict, Optional, Set
 
-from colorama import Fore, Style
-from columnar import columnar
 from starkware.cairo.lang.compiler.program import ProgramBase
+from starkware.cairo.lang.vm import cairo_runner
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner
 from starkware.cairo.lang.vm.relocatable import MaybeRelocatable
 from starkware.cairo.lang.vm.vm_core import RunContext, VirtualMachine
-from starkware.cairo.lang.vm import cairo_runner
+
+
+class Headers:
+    FILE: str = "File "
+    FILE_INDEX: int = 0
+
+    COVERED: str = "Covered(%) "
+    COVERED_INDEX: int = 1
+
+    MISSED: str = "Missed(%) "
+    MISSED_INDEX: int = 2
+
+    LINES_MISSED: str = "Lines missed"
+    LINE_MISSED_INDEX: int = 3
+
+
+class Colors:
+    FAIL = "\033[91m"
+    GREEN = "\033[92m"
+    WARNING = "\033[93m"
+    END = "\033[0m"
 
 
 @dataclass
@@ -19,6 +39,10 @@ class CoverageFile:
     statements: Set[int]
     precision: int = 1
 
+    @staticmethod
+    def col_sizes(sizes=[]):
+        return sizes
+
     def __post_init__(self):
         self.nb_statements = len(self.statements)
         self.nb_covered = len(self.covered)
@@ -27,71 +51,67 @@ class CoverageFile:
         self.pct_covered = 100 * self.nb_covered / self.nb_statements
         self.pct_missed = 100 * self.nb_missed / self.nb_statements
 
-    def columnar_format(self):
-        missed = "" if not self.missed else self.missed
-        if self.pct_covered < 50.0:
-            color = Fore.RED
-        elif 50.0 <= self.pct_covered < 80.0:
-            color = Fore.YELLOW
+    def __str__(self):
+        sizes = self.__class__.col_sizes()
+        name_len = len(self.name)
+        if name_len > sizes[Headers.FILE_INDEX]:
+            name = f"{f'[...]{self.name[5 + name_len - sizes[Headers.FILE_INDEX]:]}':<{sizes[Headers.FILE_INDEX]}}"
         else:
-            color = Fore.GREEN
-        return [
-            f"{color}{self.name}  {Style.RESET_ALL}",
-            f"{color}{self.nb_statements}{Style.RESET_ALL}",
-            f"{color}{self.pct_covered:.{self.precision}f}{Style.RESET_ALL}",
-            f"{color}{self.pct_missed:.{self.precision}f}{Style.RESET_ALL}",
-            f"{color}{missed}{Style.RESET_ALL}",
-        ]
+            name = f"{self.name:<{sizes[Headers.FILE_INDEX]}}"
+        pct_covered = f"{self.pct_covered:<{sizes[Headers.COVERED_INDEX]}.{self.precision}f}"
+        pct_missed = f"{self.pct_missed:<{sizes[Headers.MISSED_INDEX]}.{self.precision}f}"
+        prefix = " " * (len(name) + len(pct_covered) + len(pct_missed) + 5)
+        missed = wrap(str(self.missed), sizes[Headers.LINE_MISSED_INDEX], initial_indent=" ")
+        missed[1:] = [f"{prefix}{val}" for val in missed[1:]]
+        missed = "\n".join(missed)
+        if 0 <= self.pct_covered < 50:
+            color = Colors.FAIL
+        elif 50 <= self.pct_covered < 80:
+            color = Colors.WARNING
+        else:
+            color = Colors.GREEN
+        return f"{color}{name} {pct_covered} {pct_missed} {missed}{Colors.END}"
 
 
-def report_runs(
-    excluded_file: Optional[Set[str]] = None, precision=1, out_file: Optional[str] = None, print_summary: bool = True
-):
+def print_sum(covered_files: CoverageFile):
+    max_name = max([len(file.name) for file in covered_files]) + 2
+    max_missed_lines = max([len(str(file.missed)) for file in covered_files])
+    sizes = CoverageFile.col_sizes()
+    sizes.extend([max_name, len(Headers.COVERED), len(Headers.MISSED), max_missed_lines])
+    term_size = get_terminal_size()
+    while sum(sizes) > term_size.columns:
+        idx = sizes.index(max(sizes))
+        sizes[idx] = int(0.75 * sizes[idx])
+
+    headers = (
+        f"\n{Headers.FILE:{sizes[Headers.FILE_INDEX] + 1}}"
+        f"{Headers.COVERED:{sizes[Headers.COVERED_INDEX] + 1}}"
+        f"{Headers.MISSED:{sizes[Headers.MISSED_INDEX] + 1}}"
+        f"{Headers.LINES_MISSED:{sizes[Headers.LINE_MISSED_INDEX] + 1}}\n"
+    )
+    underline = "-" * len(headers)
+    print(headers + underline)
+    for file in covered_files:
+        print(file)
+
+
+def report_runs(excluded_file: Optional[Set[str]] = None, out_file: Optional[str] = None, print_summary: bool = True):
     if excluded_file is None:
         excluded_file = []
-    assert out_file.endswith(".json"), "Only json supported for now"
+    assert out_file is None or out_file.endswith(".json"), "Only json supported for now"
     report_dict = OverrideVm.covered()
     statements = OverrideVm.statements()
-    report_file = {}
-    print()
-    files = [
-        CoverageFile(statements=set(statements[file]), covered=set(coverage), name=file, precision=precision)
-        for file, coverage in report_dict.items()
-        if file not in excluded_file
-    ]
+    files = sorted(
+        [
+            CoverageFile(statements=set(statements[file]), covered=set(coverage), name=file)
+            for file, coverage in report_dict.items()
+            if file not in excluded_file
+        ],
+        key=lambda x: x.name,
+    )
 
-    if out_file is not None:
-        for file in files:
-            report_one_file(covered_file=file)
     if print_summary:
-        print(
-            columnar(
-                data=[x.columnar_format() for x in files],
-                headers=["  Name  ", "  Statements  ", "  Covered  ", "  Missed  ", "  Missing lines  "],
-                justify=["l", "c", "c", "c", "l"],
-            )
-        )
-
-    with open(out_file, "w") as f:
-        dump(report_file, f, sort_keys=True, indent=4)
-
-
-def report_one_file(covered_file: CoverageFile):
-    """Extract the relevant report data for a single file."""
-    summary = {
-        "covered_lines": covered_file.nb_covered,
-        "num_statements": covered_file.nb_statements,
-        "percent_covered": covered_file.pct_covered,
-        "missing_lines": covered_file.nb_missed,
-        "excluded_lines": 0,
-    }
-    reported_file = {
-        "executed_lines": covered_file.covered,
-        "summary": summary,
-        "missing_lines": [],
-        "excluded_lines": [],
-    }
-    return reported_file
+        print_sum(covered_files=files)
 
 
 class OverrideVm(VirtualMachine):
