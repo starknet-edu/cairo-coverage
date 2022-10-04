@@ -218,7 +218,7 @@ class OverrideVm(VirtualMachine):
         statements: defaultdict(list),
         report_dict: defaultdict(list) = None,
     ) -> None:
-        """Converts the touched pcs to the line numbers of the original file."""
+        """Converts the touched pcs to the line numbers of the original file and saves them."""
         should_update_report = (
             pc in self.touched_pcs
         )  # If the pc is not touched by the test don't report it

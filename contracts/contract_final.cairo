@@ -51,11 +51,12 @@ func view_proposal{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_p
     return (res,);
 }
 
-@view
+@external
 func view_counter{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}() -> (
     res: Uint256
 ) {
     let (res) = counter.read();
+    assert 1 = 0;
     return (res,);
 }
 

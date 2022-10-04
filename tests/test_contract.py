@@ -161,6 +161,7 @@ class CairoContractTest(TestCase):
                 amount=(1, 0), to_=signer1, targetERC20=self.mockERC20.contract_address
             ).execute(caller_address=signer5)
 
+
     @pytest.mark.asyncio
     async def test_sign_proposal(self):
         """Test everything about signing a proposal"""
