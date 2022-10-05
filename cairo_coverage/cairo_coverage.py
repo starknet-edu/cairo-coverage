@@ -157,6 +157,7 @@ def report_runs(
 def reset():
     OverrideVm.covered().clear()
     OverrideVm.statements().clear()
+    CoverageFile.col_sizes().clear()
 
 
 class OverrideVm(VirtualMachine):
@@ -205,7 +206,6 @@ class OverrideVm(VirtualMachine):
         notes: Optional[List[str]] = None,
         hint_index: Optional[int] = None,
     ):
-        print("there")
         """In case the run fails creates report coverage."""
         self.cover_file()
         return self.old_as_vm_exception(exc, with_traceback, notes, hint_index)
