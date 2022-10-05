@@ -1,6 +1,5 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from importlib.metadata import FileHash
 from os import get_terminal_size
 from textwrap import wrap
 from typing import Any, Dict, List, Optional, Set
@@ -97,33 +96,36 @@ class CoverageFile:
 
 def print_sum(covered_files: CoverageFile):
     """Print the coverage summary of the project."""
-    max_name = max([len(file.name) for file in covered_files]) + 2  # longest name
-    max_missed_lines = max(
-        [len(str(file.missed)) for file in covered_files]
-    )  # length of the longest missed lines list
-    sizes = (
-        CoverageFile.col_sizes()
-    )  # init the sizes list with our static method so it's available everywhere
-    sizes.extend(
-        [max_name, len(Headers.COVERED), len(Headers.MISSED), max_missed_lines]
-    )  # fill the sizes
-    term_size = get_terminal_size()
-    while (
-        sum(sizes) > term_size.columns
-    ):  # while the length of all the cols is > the terminal size, reduce the biggest col
-        idx = sizes.index(max(sizes))
-        sizes[idx] = int(0.75 * sizes[idx])
+    try:
+        term_size = get_terminal_size()
+        max_name = max([len(file.name) for file in covered_files]) + 2  # longest name
+        max_missed_lines = max(
+            [len(str(file.missed)) for file in covered_files]
+        )  # length of the longest missed lines list
+        sizes = (
+            CoverageFile.col_sizes()
+        )  # init the sizes list with our static method so it's available everywhere
+        sizes.extend(
+            [max_name, len(Headers.COVERED), len(Headers.MISSED), max_missed_lines]
+        )  # fill the sizes
+        while (
+            sum(sizes) > term_size.columns
+        ):  # while the length of all the cols is > the terminal size, reduce the biggest col
+            idx = sizes.index(max(sizes))
+            sizes[idx] = int(0.75 * sizes[idx])
 
-    headers = (  # prepare the coverage table headers
-        f"\n{Headers.FILE:{sizes[Headers.FILE_INDEX] + 1}}"
-        f"{Headers.COVERED:{sizes[Headers.COVERED_INDEX] + 1}}"
-        f"{Headers.MISSED:{sizes[Headers.MISSED_INDEX] + 1}}"
-        f"{Headers.LINES_MISSED:{sizes[Headers.LINE_MISSED_INDEX] + 1}}\n"
-    )
-    underline = "-" * len(headers)  # to separate the header from the values
-    print(headers + underline)
-    for file in covered_files:  # prints the report of each file
-        print(file)
+        headers = (  # prepare the coverage table headers
+            f"\n{Headers.FILE:{sizes[Headers.FILE_INDEX] + 1}}"
+            f"{Headers.COVERED:{sizes[Headers.COVERED_INDEX] + 1}}"
+            f"{Headers.MISSED:{sizes[Headers.MISSED_INDEX] + 1}}"
+            f"{Headers.LINES_MISSED:{sizes[Headers.LINE_MISSED_INDEX] + 1}}\n"
+        )
+        underline = "-" * len(headers)  # to separate the header from the values
+        print(headers + underline)
+        for file in covered_files:  # prints the report of each file
+            print(file)
+    except OSError:
+        pass
 
 
 def report_runs(
@@ -144,12 +146,13 @@ def report_runs(
         ],
         key=lambda x: x.name,
     )
-    if not files:
+
+    if not len(files):
         print("Nothing to report")
-        return
+        return "Nothing to report"
     if print_summary:
         print_sum(covered_files=files)
-    return FileHash
+    return files
 
 def reset():
     OverrideVm.covered().clear()
@@ -202,6 +205,7 @@ class OverrideVm(VirtualMachine):
         notes: Optional[List[str]] = None,
         hint_index: Optional[int] = None,
     ):
+        print("there")
         """In case the run fails creates report coverage."""
         self.cover_file()
         return self.old_as_vm_exception(exc, with_traceback, notes, hint_index)
