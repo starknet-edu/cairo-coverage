@@ -1,5 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
+from importlib.metadata import FileHash
 from os import get_terminal_size
 from textwrap import wrap
 from typing import Any, Dict, List, Optional, Set
@@ -127,14 +128,10 @@ def print_sum(covered_files: CoverageFile):
 
 def report_runs(
     excluded_file: Optional[Set[str]] = None,
-    out_file: Optional[str] = None,
     print_summary: bool = True,
 ):
     if excluded_file is None:
         excluded_file = []
-    assert out_file is None or out_file.endswith(
-        ".json"
-    ), "Only json supported for now."
     report_dict = OverrideVm.covered()  # get the infos of all the covered files
     statements = OverrideVm.statements()  # get the lines of codes of each files
     files = sorted(  # sort the files by filename
@@ -147,9 +144,16 @@ def report_runs(
         ],
         key=lambda x: x.name,
     )
-
+    if not files:
+        print("Nothing to report")
+        return
     if print_summary:
         print_sum(covered_files=files)
+    return FileHash
+
+def reset():
+    OverrideVm.covered().clear()
+    OverrideVm.statements().clear()
 
 
 class OverrideVm(VirtualMachine):
