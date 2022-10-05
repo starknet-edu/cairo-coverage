@@ -8,7 +8,7 @@ from starkware.crypto.signature.signature import private_to_stark_key
 from starkware.starknet.testing.starknet import Starknet
 from starkware.starkware_utils.error_handling import StarkException
 
-from tests import cov
+from cairo_coverage import cairo_coverage
 
 
 @dataclass
@@ -78,9 +78,9 @@ class Proposal:
 
 
 # The path to the contract source code.
-CONTRACT_FILE = os.path.join("contracts", "contract_final.cairo")
+CONTRACT_FILE = os.path.join("examples", "contracts", "contract_final.cairo")
 # The path to the mockERC20 source code.
-MOCKERC20_FILE = os.path.join("contracts", "ERC20.cairo")
+MOCKERC20_FILE = os.path.join("examples","contracts", "ERC20.cairo")
 
 
 # Defining the various signers addresses
@@ -103,6 +103,7 @@ class CairoContractTest(TestCase):
     @classmethod
     async def setUp(cls):
         """This method is called before each test method"""
+        cairo_coverage.reset()
         cls.starknet = await Starknet.empty()  # create a mock starknet instance
         cls.multisig = await cls.starknet.deploy(  # deploy the multisig contract
             source=CONTRACT_FILE, constructor_calldata=multisig_calldata
@@ -160,7 +161,6 @@ class CairoContractTest(TestCase):
             await self.multisig.create_proposal(
                 amount=(1, 0), to_=signer1, targetERC20=self.mockERC20.contract_address
             ).execute(caller_address=signer5)
-
 
     @pytest.mark.asyncio
     async def test_sign_proposal(self):
@@ -220,7 +220,7 @@ class CairoContractTest(TestCase):
         execution_info = await self.multisig.view_proposal(proposal_nb=(0, 0)).call()
         end_balance = await self.mockERC20.balanceOf(account=signer1).call()
         signer = await self.multisig.view_approved_signer(proposal_nb=(0, 0), signer_nb=(2, 0)).call()
-        cov.report_runs(out_file="report.json")
+        cairo_coverage.report_runs()
 
         # check that the first event to be emitted is the execution event
         self.assertEqual(res.main_call_events[0], expected_execute_event)

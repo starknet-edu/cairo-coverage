@@ -3,4 +3,4 @@ array.json
 .pytest_cache
 __pycache__
 .coverage
-__init__.py
+venv/

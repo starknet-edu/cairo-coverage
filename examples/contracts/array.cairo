@@ -3,7 +3,7 @@
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.starknet.common.syscalls import get_contract_address
 from starkware.cairo.common.registers import get_fp_and_pc
-from contracts.lib import BasicStruct, array_product
+from examples.contracts.lib import BasicStruct, array_product
 
 @view
 func view_product{syscall_ptr: felt*, pedersen_ptr: HashBuiltin*, range_check_ptr}(
