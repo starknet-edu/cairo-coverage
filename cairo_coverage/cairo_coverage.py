@@ -1,9 +1,11 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from os import get_terminal_size
-from textwrap import wrap
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, DefaultDict, Dict, List, Optional, Set
 
+from textwrap import wrap
+
+from starkware.cairo.lang.compiler.instruction import Instruction
 from starkware.cairo.lang.compiler.program import ProgramBase
 from starkware.cairo.lang.vm import cairo_runner
 from starkware.cairo.lang.vm.builtin_runner import BuiltinRunner
@@ -38,10 +40,10 @@ class Colors:
 
 @dataclass
 class CoverageFile:
-    name: str  # filename
-    covered: Set[int]  # tested lines
-    statements: Set[int]  # lines with code
-    precision: int = 1  # decimals for %
+    name: str  # Filename.
+    covered: Set[int]  # Tested lines.
+    statements: Set[int]  # Lines with code.
+    precision: int = 1  # Decimals for %.
 
     @staticmethod
     def col_sizes(sizes=[]):
@@ -49,84 +51,84 @@ class CoverageFile:
         return sizes
 
     def __post_init__(self):
-        self.nb_statements = len(
-            self.statements
-        )  # nb of lines with code in the cairo file
-        self.nb_covered = len(self.covered)  # nb of lines tested
-        self.missed = sorted(list(self.statements - self.covered))  # lines not tested
-        self.nb_missed = len(self.missed)  # nb of lines not tested
-        self.pct_covered = (
-            100 * self.nb_covered / self.nb_statements
-        )  # % of lines tested
-        self.pct_missed = (
-            100 * self.nb_missed / self.nb_statements
-        )  # % of lines not tested
+        self.nb_statements = len(self.statements)  # Nb of lines with code in the cairo file.
+        self.nb_covered = len(self.covered)  # Nb of lines tested.
+        self.missed = sorted(list(self.statements - self.covered))  # Lines not tested.
+        self.nb_missed = len(self.missed)  # Nb of lines not tested.
+        self.pct_covered = 100 * self.nb_covered / self.nb_statements  # % of lines tested.
+        self.pct_missed = 100 * self.nb_missed / self.nb_statements  # % of lines not tested.
 
     def __str__(self):
-        sizes = self.__class__.col_sizes()  # get columns size
+        sizes = self.__class__.col_sizes()  # Get columns size.
         name_len = len(self.name)
         if (
             name_len > sizes[Headers.FILE_INDEX]
-        ):  # if the filename is longer than the col len we crop it
-            name = f"{'[...]' + self.name[5 + name_len - sizes[Headers.FILE_INDEX]:]:<{sizes[Headers.FILE_INDEX]}}"
-            # self.name[5 + name_len - sizes[Headers.FILE_INDEX] crops the filename so it fits in the column
-            # :<{sizes[Headers.FILE_INDEX] formats the string to be left centered and pads it to the column length
+        ):  # If the filename is longer than the col len we crop it.
+            cropped_name = self.name[
+                5 + name_len - sizes[Headers.FILE_INDEX] :
+            ]  # Crops the filename to the filename col size and leave room for [...] prefix.
+            # Formats the string to be left aligned and to file the col size length.
+            name = f"{'[...]' + cropped_name:<{sizes[Headers.FILE_INDEX]}}"
         else:
-            name = f"{self.name:<{sizes[Headers.FILE_INDEX]}}"  # pads the filename to the column length
-        pct_covered = f"{self.pct_covered:^{sizes[Headers.COVERED_INDEX]}.{self.precision}f}"  # % covered centered with right decimals
-        pct_missed = f"{self.pct_missed:^{sizes[Headers.MISSED_INDEX]}.{self.precision}f}"  # % missed centered with right decimals
+            # Pads the filename to the column length.
+            name = f"{self.name:<{sizes[Headers.FILE_INDEX]}}"
+        # % covered centered with right decimals.
+        pct_covered = f"{self.pct_covered:^{sizes[Headers.COVERED_INDEX]}.{self.precision}f}"
+        # % missed centered with right decimals.
+        pct_missed = f"{self.pct_missed:^{sizes[Headers.MISSED_INDEX]}.{self.precision}f}"
         prefix = " " * (
             len(name) + len(pct_covered) + len(pct_missed) + 4
-        )  # offset of the missed lines column
-        if len(str(self.missed)) >  sizes[Headers.LINE_MISSED_INDEX]:
-            missed = wrap(
+        )  # Offset of the missed lines column.
+        if len(str(self.missed)) > sizes[Headers.LINE_MISSED_INDEX]:
+            wrapped_missed = wrap(
                 str(self.missed), sizes[Headers.LINE_MISSED_INDEX]
-            )   # wrap the missed lines list if too big
-            missed[1:] = [
-                f"{prefix}{val}" for val in missed[1:]
-            ]  # prefix the wrapped missed lines
-            missed = "\n".join(missed)  # convert it to multiline string
-        else: 
+            )  # Wrap the missed lines list if too big.
+            wrapped_missed[1:] = [
+                f"{prefix}{val}" for val in wrapped_missed[1:]
+            ]  # Prefix the wrapped missed lines.
+            missed: str = "\n".join(missed)  # Convert it to multiline string.
+        else:
             missed = str(self.missed)
-        if 0 <= self.pct_covered < 50:  # if coverage is not enough writes in red
+        if 0 <= self.pct_covered < 50:  # If coverage is not enough writes in red.
             color = Colors.FAIL
-        elif 50 <= self.pct_covered < 80:  # if coverage is mid enough writes in yellow
+        elif 50 <= self.pct_covered < 80:  # If coverage is mid enough writes in yellow.
             color = Colors.WARNING
-        else:  # if coverage is good write in green
+        else:  # If coverage is good write in green.
             color = Colors.GREEN
-        return f"{color}{name} {pct_covered} {pct_missed} {missed}{Colors.END}"  # formatted file line report
+        # Formatted file line report.
+        return f"{color}{name} {pct_covered} {pct_missed} {missed}{Colors.END}"
 
 
-def print_sum(covered_files: CoverageFile):
+def print_sum(covered_files: List[CoverageFile]):
     """Print the coverage summary of the project."""
     try:
         term_size = get_terminal_size()
-        max_name = max([len(file.name) for file in covered_files]) + 2  # longest name
+        max_name = max([len(file.name) for file in covered_files]) + 2  # Longest name.
         max_missed_lines = max(
             [len(str(file.missed)) for file in covered_files]
-        )  # length of the longest missed lines list
+        )  # Length of the longest missed lines list.
         sizes = (
             CoverageFile.col_sizes()
-        )  # init the sizes list with our static method so it's available everywhere
+        )  # Init the sizes list with our static method so it's available everywhere.
         sizes.extend(
             [max_name, len(Headers.COVERED), len(Headers.MISSED), max_missed_lines]
-        )  # fill the sizes
+        )  # Fill the sizes.
 
         while (
             sum(sizes) > term_size.columns
-        ):  # while the length of all the cols is > the terminal size, reduce the biggest col
+        ):  # While the length of all the cols is > the terminal size, reduce the biggest col.
             idx = sizes.index(max(sizes))
             sizes[idx] = int(0.75 * sizes[idx])
 
-        headers = (  # prepare the coverage table headers
+        headers = (
             f"\n{Headers.FILE:{sizes[Headers.FILE_INDEX] + 1}}"
             f"{Headers.COVERED:{sizes[Headers.COVERED_INDEX] + 1}}"
             f"{Headers.MISSED:{sizes[Headers.MISSED_INDEX] + 1}}"
             f"{Headers.LINES_MISSED:{sizes[Headers.LINE_MISSED_INDEX] + 1}}\n"
-        )
-        underline = "-" * term_size.columns  # to separate the header from the values
+        )  # Prepare the coverage table headers.
+        underline = "-" * term_size.columns  # To separate the header from the values.
         print(headers + underline)
-        for file in covered_files:  # prints the report of each file
+        for file in covered_files:  # Prints the report of each file.
             print(file)
     except OSError:
         pass
@@ -137,19 +139,17 @@ def report_runs(
     print_summary: bool = True,
 ):
     if excluded_file is None:
-        excluded_file = []
-    report_dict = OverrideVm.covered()  # get the infos of all the covered files
-    statements = OverrideVm.statements()  # get the lines of codes of each files
-    files = sorted(  # sort the files by filename
+        excluded_file = set()
+    report_dict = OverrideVm.covered()  # Get the infos of all the covered files.
+    statements = OverrideVm.statements()  # Get the lines of codes of each files.
+    files = sorted(
         [
-            CoverageFile(
-                statements=set(statements[file]), covered=set(coverage), name=file
-            )
+            CoverageFile(statements=set(statements[file]), covered=set(coverage), name=file)
             for file, coverage in report_dict.items()
             if file not in excluded_file
         ],
         key=lambda x: x.name,
-    )
+    )  # Sort the files by filename.
 
     if not len(files):
         print("Nothing to report")
@@ -157,6 +157,7 @@ def report_runs(
     if print_summary:
         print_sum(covered_files=files)
     return files
+
 
 def reset():
     OverrideVm.covered().clear()
@@ -182,18 +183,16 @@ class OverrideVm(VirtualMachine):
             builtin_runners=builtin_runners,
             program_base=program_base,
         )
-        self.old_end_run = (
-            super().end_run
-        )  # save the old end run function to wrap it afterwards
+        self.old_end_run = super().end_run  # Save the old end run function to wrap it afterwards.
         self.old_run_instruction = (
             super().run_instruction
-        )  # save the old run instruction function to wrap it afterwards
+        )  # Save the old run instruction function to wrap it afterwards.
         self.old_as_vm_exception = (
             super().as_vm_exception
-        )  # save the old vm as exception function to wrap it afterwards
-        self.touched_pcs = []
+        )  # Save the old vm as exception function to wrap it afterwards.
+        self.touched_pcs: List[int] = []
 
-    def run_instruction(self, instruction):
+    def run_instruction(self, instruction: Instruction):
         """Saves the current pc and runs the instruction."""
         self.touched_pcs.append(self.run_context.pc.offset)
         self.old_run_instruction(instruction=instruction)
@@ -215,43 +214,41 @@ class OverrideVm(VirtualMachine):
         return self.old_as_vm_exception(exc, with_traceback, notes, hint_index)
 
     @staticmethod
-    def covered(val: defaultdict(list) = defaultdict(list)) -> defaultdict(list):
+    def covered(val: DefaultDict[str, List[int]] = defaultdict(list)) -> DefaultDict[str, list]:
         """To share the covered files between all the instances."""
         return val
 
     @staticmethod
-    def statements(val: defaultdict(list) = defaultdict(list)) -> defaultdict(list):
+    def statements(val: DefaultDict[str, List[int]] = defaultdict(list)) -> DefaultDict[str, list]:
         """To share the lines of codes in files between all the instances."""
         return val
 
     def pc_to_line(
         self,
         pc,
-        statements: defaultdict(list),
-        report_dict: defaultdict(list) = None,
+        statements: DefaultDict[str, list],
+        report_dict: DefaultDict[str, List[int]],
     ) -> None:
         """Converts the touched pcs to the line numbers of the original file and saves them."""
         should_update_report = (
             pc in self.touched_pcs
-        )  # If the pc is not touched by the test don't report it
+        )  # If the pc is not touched by the test don't report it.
         instruct = self.program.debug_info.instruction_locations[
             pc
-        ].inst  # first instruction in the debug info
-        file = instruct.input_file.filename  # current analyzed file
+        ].inst  # First instruction in the debug info.
+        file = instruct.input_file.filename  # Current analyzed file.
         while True:
-            if "autogen" not in file:  # if file is auto generated discard it
-                lines = list(  # get the lines touched
+            if "autogen" not in file:  # If file is auto generated discard it.
+                lines = list(
                     range(
                         instruct.start_line,
                         instruct.end_line + 1,
                     )
-                )
+                )  # Get the lines touched.
                 if should_update_report:
                     report_dict[file].extend(lines)
                 statements[file].extend(lines)
-            if (
-                instruct.parent_location is not None
-            ):  # continue until we have last parent location
+            if instruct.parent_location is not None:  # Continue until we have last parent location.
                 instruct = instruct.parent_location[0]
                 file = instruct.input_file.filename
             else:
