@@ -76,15 +76,18 @@ class CoverageFile:
         pct_covered = f"{self.pct_covered:^{sizes[Headers.COVERED_INDEX]}.{self.precision}f}"  # % covered centered with right decimals
         pct_missed = f"{self.pct_missed:^{sizes[Headers.MISSED_INDEX]}.{self.precision}f}"  # % missed centered with right decimals
         prefix = " " * (
-            len(name) + len(pct_covered) + len(pct_missed) + 5
+            len(name) + len(pct_covered) + len(pct_missed) + 4
         )  # offset of the missed lines column
-        missed = wrap(
-            str(self.missed), sizes[Headers.LINE_MISSED_INDEX], initial_indent=" "
-        )  # wrap the missed lines list if too big
-        missed[1:] = [
-            f"{prefix}{val}" for val in missed[1:]
-        ]  # prefix the wrapped missed lines
-        missed = "\n".join(missed)  # convert it to multiline string
+        if len(str(self.missed)) >  sizes[Headers.LINE_MISSED_INDEX]:
+            missed = wrap(
+                str(self.missed), sizes[Headers.LINE_MISSED_INDEX]
+            )   # wrap the missed lines list if too big
+            missed[1:] = [
+                f"{prefix}{val}" for val in missed[1:]
+            ]  # prefix the wrapped missed lines
+            missed = "\n".join(missed)  # convert it to multiline string
+        else: 
+            missed = str(self.missed)
         if 0 <= self.pct_covered < 50:  # if coverage is not enough writes in red
             color = Colors.FAIL
         elif 50 <= self.pct_covered < 80:  # if coverage is mid enough writes in yellow
@@ -108,6 +111,7 @@ def print_sum(covered_files: CoverageFile):
         sizes.extend(
             [max_name, len(Headers.COVERED), len(Headers.MISSED), max_missed_lines]
         )  # fill the sizes
+
         while (
             sum(sizes) > term_size.columns
         ):  # while the length of all the cols is > the terminal size, reduce the biggest col
@@ -120,7 +124,7 @@ def print_sum(covered_files: CoverageFile):
             f"{Headers.MISSED:{sizes[Headers.MISSED_INDEX] + 1}}"
             f"{Headers.LINES_MISSED:{sizes[Headers.LINE_MISSED_INDEX] + 1}}\n"
         )
-        underline = "-" * len(headers)  # to separate the header from the values
+        underline = "-" * term_size.columns  # to separate the header from the values
         print(headers + underline)
         for file in covered_files:  # prints the report of each file
             print(file)
