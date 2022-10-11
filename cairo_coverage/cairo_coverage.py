@@ -86,7 +86,7 @@ class CoverageFile:
             wrapped_missed[1:] = [
                 f"{prefix}{val}" for val in wrapped_missed[1:]
             ]  # Prefix the wrapped missed lines.
-            missed: str = "\n".join(missed)  # Convert it to multiline string.
+            missed: str = "\n".join(wrapped_missed)  # Convert it to multiline string.
         else:
             missed = str(self.missed)
         if 0 <= self.pct_covered < 50:  # If coverage is not enough writes in red.
