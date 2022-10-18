@@ -146,7 +146,7 @@ def report_runs(
         [
             CoverageFile(statements=set(statements[file]), covered=set(coverage), name=file)
             for file, coverage in report_dict.items()
-            if file not in excluded_file
+            if not any(excluded in file for excluded in excluded_file)
         ],
         key=lambda x: x.name,
     )  # Sort the files by filename.
