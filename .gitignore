@@ -5,3 +5,4 @@ array.json
 __pycache__
 .coverage
 venv/
+dist/

@@ -140,8 +140,8 @@ def report_runs(
 ):
     if excluded_file is None:
         excluded_file = set()
-    report_dict = OverrideVm.covered()  # Get the infos of all the covered files.
-    statements = OverrideVm.statements()  # Get the lines of codes of each files.
+    report_dict = OverrideVm.covered  # Get the infos of all the covered files.
+    statements = OverrideVm.statements  # Get the lines of codes of each files.
     files = sorted(
         [
             CoverageFile(statements=set(statements[file]), covered=set(coverage), name=file)
@@ -160,12 +160,16 @@ def report_runs(
 
 
 def reset():
-    OverrideVm.covered().clear()
-    OverrideVm.statements().clear()
+    OverrideVm.covered.clear()
+    OverrideVm.statements.clear()
     CoverageFile.col_sizes().clear()
 
 
 class OverrideVm(VirtualMachine):
+
+    covered: DefaultDict[str, List[int]] = defaultdict(list)
+    statements: DefaultDict[str, List[int]] = defaultdict(list)
+
     def __init__(
         self,
         program: ProgramBase,
@@ -213,16 +217,6 @@ class OverrideVm(VirtualMachine):
         self.cover_file()
         return self.old_as_vm_exception(exc, with_traceback, notes, hint_index)
 
-    @staticmethod
-    def covered(val: DefaultDict[str, List[int]] = defaultdict(list)) -> DefaultDict[str, list]:
-        """To share the covered files between all the instances."""
-        return val
-
-    @staticmethod
-    def statements(val: DefaultDict[str, List[int]] = defaultdict(list)) -> DefaultDict[str, list]:
-        """To share the lines of codes in files between all the instances."""
-        return val
-
     def pc_to_line(
         self,
         pc,
@@ -259,8 +253,8 @@ class OverrideVm(VirtualMachine):
     ):
         """Adds the coverage report in the report dict and all the lines of code."""
         if self.program.debug_info is not None:
-            report_dict = self.__class__.covered()
-            statements = self.__class__.statements()
+            report_dict = self.__class__.covered
+            statements = self.__class__.statements
             for pc in set(self.program.debug_info.instruction_locations.keys()):
                 self.pc_to_line(pc=pc, report_dict=report_dict, statements=statements)
 

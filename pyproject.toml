@@ -10,7 +10,7 @@ packages = [{include = "cairo_coverage"}]
 python = "^3.9"
 pytest = "^7.1.3"
 asynctest = "^0.13.0"
-cairo-lang = "^0.10.0"
+cairo-lang = "0.10.1"
 
 
 [build-system]
