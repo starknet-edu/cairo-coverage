@@ -138,6 +138,7 @@ def report_runs(
     excluded_file: Optional[Set[str]] = None,
     print_summary: bool = True,
 ):
+    reset()
     if excluded_file is None:
         excluded_file = set()
     report_dict = OverrideVm.covered  # Get the infos of all the covered files.
