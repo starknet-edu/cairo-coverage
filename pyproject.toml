@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cairo-coverage"
-version = "0.1.0"
+version = "0.1.1"
 description = "Cairo coverage module"
 authors = ["LucasLvy <lucaslevy10@gmail.com>"]
 readme = "README.md"

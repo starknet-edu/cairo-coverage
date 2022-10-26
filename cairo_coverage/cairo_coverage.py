@@ -154,7 +154,7 @@ def report_runs(
 
     if not len(files):
         print("Nothing to report")
-        return "Nothing to report"
+        return CoverageFile(name="", covered={}, statements={})
     if print_summary:
         print_sum(covered_files=files)
     return files
