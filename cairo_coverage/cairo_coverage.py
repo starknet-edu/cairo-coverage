@@ -51,6 +51,8 @@ class CoverageFile:
         return sizes
 
     def __post_init__(self):
+        if not self.statements:
+            return
         self.nb_statements = len(self.statements)  # Nb of lines with code in the cairo file.
         self.nb_covered = len(self.covered)  # Nb of lines tested.
         self.missed = sorted(list(self.statements - self.covered))  # Lines not tested.
@@ -138,7 +140,6 @@ def report_runs(
     excluded_file: Optional[Set[str]] = None,
     print_summary: bool = True,
 ):
-    reset()
     if excluded_file is None:
         excluded_file = set()
     report_dict = OverrideVm.covered  # Get the infos of all the covered files.
@@ -154,9 +155,10 @@ def report_runs(
 
     if not len(files):
         print("Nothing to report")
-        return CoverageFile(name="", covered={}, statements={})
+        return []
     if print_summary:
         print_sum(covered_files=files)
+    reset()
     return files
 
 
