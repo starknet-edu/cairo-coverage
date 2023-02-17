@@ -25,7 +25,7 @@ async def contract(starknet: Starknet) -> StarknetContract:
 @pytest.mark.asyncio
 async def test_cover_constructor():
     cairo_coverage.reset()
-    assert cairo_coverage.report_runs(print_summary=False) == "Nothing to report"
+    assert cairo_coverage.report_runs(print_summary=False) == []
 
 
 @pytest.mark.asyncio
