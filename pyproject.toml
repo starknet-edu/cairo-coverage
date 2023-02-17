@@ -4,13 +4,13 @@ version = "0.1.4"
 description = "Cairo coverage module"
 authors = ["LucasLvy <lucaslevy10@gmail.com>"]
 readme = "README.md"
-packages = [{include = "cairo_coverage"}]
+packages = [{ include = "cairo_coverage" }]
 
 [tool.poetry.dependencies]
 python = "^3.9"
 pytest = "^7.1.3"
 asynctest = "^0.13.0"
-cairo-lang = "0.10.1"
+cairo-lang = "^0.10.1"
 
 
 [build-system]
