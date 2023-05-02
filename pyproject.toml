@@ -5,6 +5,7 @@ description = "Cairo coverage module"
 authors = ["LucasLvy <lucaslevy10@gmail.com>"]
 readme = "README.md"
 packages = [{ include = "cairo_coverage" }]
+repository = "https://github.com/starknet-edu/cairo-coverage"
 
 [tool.poetry.dependencies]
 python = "^3.9"
